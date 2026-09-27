@@ -24,9 +24,27 @@
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
       </button>
+    </div>
 
-      <!-- 搜索联想与历史记录下拉面板 -->
-      <div v-if="showDropdown && (historyList.length > 0 || suggestions.length > 0)" class="search-suggestions-dropdown">
+    <!-- 快捷引擎按钮 -->
+    <div class="buttons" v-if="engines && engines.length > 1">
+      <button
+        v-for="(engine, key) in engines"
+        :key="key"
+        @click="searchWithEngine(engine, openingMethod)"
+      >
+        {{ engine.title }}
+      </button>
+    </div>
+
+    <!-- 搜索联想与历史记录下拉面板（传送挂载到 body，彻底防止被任何父级 overflow 截断） -->
+    <Teleport to="body">
+      <div
+        v-if="showDropdown && (historyList.length > 0 || suggestions.length > 0)"
+        class="search-suggestions-dropdown-floating"
+        :style="dropdownStyle"
+        @mousedown.stop
+      >
         <!-- 历史记录 -->
         <div v-if="historyList.length > 0 && !query.trim()" class="dropdown-section">
           <div class="dropdown-header">
@@ -58,18 +76,7 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 快捷引擎按钮 -->
-    <div class="buttons" v-if="engines && engines.length > 1">
-      <button
-        v-for="(engine, key) in engines"
-        :key="key"
-        @click="searchWithEngine(engine, openingMethod)"
-      >
-        {{ engine.title }}
-      </button>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -92,6 +99,7 @@ export default {
       selectedIndex: -1,
       debounceTimer: null,
       currentJsonpScript: null,
+      dropdownCoords: { top: 0, left: 0, width: 0 },
     };
   },
   computed: {
@@ -110,17 +118,39 @@ export default {
     openingMethod() {
       return this.options.openingMethod || 'newtab';
     },
+    dropdownStyle() {
+      return {
+        top: `${this.dropdownCoords.top}px`,
+        left: `${this.dropdownCoords.left}px`,
+        width: `${this.dropdownCoords.width}px`,
+      };
+    },
   },
   mounted() {
     this.loadHistory();
+    window.addEventListener('resize', this.updateDropdownCoords);
+    window.addEventListener('scroll', this.updateDropdownCoords, true);
   },
   beforeUnmount() {
+    window.removeEventListener('resize', this.updateDropdownCoords);
+    window.removeEventListener('scroll', this.updateDropdownCoords, true);
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     if (this.currentJsonpScript && document.body.contains(this.currentJsonpScript)) {
       document.body.removeChild(this.currentJsonpScript);
     }
   },
   methods: {
+    updateDropdownCoords() {
+      if (!this.showDropdown) return;
+      const el = this.$refs.searchInput;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      this.dropdownCoords = {
+        top: rect.bottom + window.scrollY + 6,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      };
+    },
     loadHistory() {
       try {
         const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -158,6 +188,7 @@ export default {
     handleFocus() {
       this.loadHistory();
       this.showDropdown = true;
+      this.$nextTick(this.updateDropdownCoords);
       if (this.query.trim()) {
         this.fetchSuggestions(this.query.trim());
       }
@@ -175,6 +206,7 @@ export default {
     handleInput() {
       const q = this.query.trim();
       this.selectedIndex = -1;
+      this.updateDropdownCoords();
       if (!q) {
         this.suggestions = [];
         return;
@@ -182,7 +214,7 @@ export default {
       if (this.debounceTimer) clearTimeout(this.debounceTimer);
       this.debounceTimer = setTimeout(() => {
         this.fetchSuggestions(q);
-      }, 180);
+      }, 150);
     },
     fetchSuggestions(q) {
       if (!q || isUrlLike(q)) {
@@ -193,18 +225,20 @@ export default {
         document.body.removeChild(this.currentJsonpScript);
       }
 
+      const script = document.createElement('script');
+      this.currentJsonpScript = script;
       const cbName = `google_search_suggest_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
       window[cbName] = (data) => {
         if (Array.isArray(data) && Array.isArray(data[1])) {
           this.suggestions = data[1].slice(0, 8);
           this.showDropdown = true;
+          this.$nextTick(this.updateDropdownCoords);
         }
         delete window[cbName];
         if (script.parentNode) script.parentNode.removeChild(script);
       };
 
-      const script = document.createElement('script');
-      this.currentJsonpScript = script;
       script.src = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q)}&callback=${cbName}`;
       script.onerror = () => {
         delete window[cbName];
@@ -366,92 +400,6 @@ export default {
     }
   }
 
-  .search-suggestions-dropdown {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    background: var(--item-background, #1e2029);
-    border: 1px solid var(--outline-color, rgba(255, 255, 255, 0.15));
-    border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    z-index: 100;
-    overflow: hidden;
-    padding: 0.3rem 0;
-    backdrop-filter: blur(10px);
-
-    .dropdown-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.4rem 1rem;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--dim-text-color, rgba(255, 255, 255, 0.5));
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-
-      .clear-history-btn {
-        background: none;
-        border: none;
-        color: var(--warning, #ff5c5c);
-        font-size: 0.75rem;
-        cursor: pointer;
-        padding: 0;
-
-        &:hover {
-          text-decoration: underline;
-        }
-      }
-    }
-
-    .suggestion-item {
-      display: flex;
-      align-items: center;
-      padding: 0.55rem 1rem;
-      cursor: pointer;
-      font-size: 0.95rem;
-      color: var(--item-text-color, #ffffff);
-      transition: background 0.15s ease;
-
-      &:hover, &.active {
-        background: var(--item-background-hover, rgba(255, 255, 255, 0.1));
-      }
-
-      .icon {
-        margin-right: 0.75rem;
-        font-size: 0.85rem;
-        opacity: 0.6;
-      }
-
-      .text {
-        flex: 1;
-        text-align: left;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-
-        :deep(strong) {
-          color: var(--primary, #64b5f6);
-        }
-      }
-
-      .delete-item-btn {
-        background: none;
-        border: none;
-        color: var(--dim-text-color, rgba(255, 255, 255, 0.4));
-        font-size: 1.1rem;
-        cursor: pointer;
-        padding: 0 0.4rem;
-        line-height: 1;
-
-        &:hover {
-          color: var(--warning, #ff5c5c);
-        }
-      }
-    }
-  }
-
   .buttons {
     display: flex;
     justify-content: center;
@@ -471,6 +419,93 @@ export default {
       &:hover {
         background: var(--item-background-hover);
         border-color: var(--primary);
+      }
+    }
+  }
+}
+</style>
+
+<!-- 全局浮动样式（Teleport 到 body，彻底跨越所有容器的 overflow 限制） -->
+<style lang="scss">
+.search-suggestions-dropdown-floating {
+  position: absolute;
+  background: var(--item-background, #1e2029);
+  border: 1px solid var(--outline-color, rgba(255, 255, 255, 0.2));
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 99999;
+  overflow: hidden;
+  padding: 0.3rem 0;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+
+  .dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--dim-text-color, rgba(255, 255, 255, 0.5));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+    .clear-history-btn {
+      background: none;
+      border: none;
+      color: var(--warning, #ff5c5c);
+      font-size: 0.75rem;
+      cursor: pointer;
+      padding: 0;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  .suggestion-item {
+    display: flex;
+    align-items: center;
+    padding: 0.55rem 1rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--item-text-color, #ffffff);
+    transition: background 0.15s ease;
+
+    &:hover, &.active {
+      background: var(--item-background-hover, rgba(255, 255, 255, 0.12));
+    }
+
+    .icon {
+      margin-right: 0.75rem;
+      font-size: 0.85rem;
+      opacity: 0.6;
+    }
+
+    .text {
+      flex: 1;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      strong {
+        color: var(--primary, #64b5f6);
+      }
+    }
+
+    .delete-item-btn {
+      background: none;
+      border: none;
+      color: var(--dim-text-color, rgba(255, 255, 255, 0.4));
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 0 0.4rem;
+      line-height: 1;
+
+      &:hover {
+        color: var(--warning, #ff5c5c);
       }
     }
   }
