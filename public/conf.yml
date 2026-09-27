@@ -125,12 +125,7 @@ sections:
       - type: podcast-player
         options:
           feedUrl: https://muse.ai/podcasts/feed/1293396087193331/a5831f17-c3a9-4655-b854-ea0921c80e32
-          limit: 10
-    items:
-      - title: 科技周报 (Muse Podcast)
-        description: 订阅源与节目主页
-        url: https://muse.ai/podcasts/feed/1293396087193331/a5831f17-c3a9-4655-b854-ea0921c80e32
-        icon: fas fa-broadcast-tower
+          limit: 15
 
   - name: Community & News
     icon: fas fa-newspaper
