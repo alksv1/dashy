@@ -1,59 +1,127 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Lissy93/dashy/master/src/utils/config/ConfigSchema.json
 ---
-# Page meta info, like heading, footer text and nav links
 pageInfo:
-  title: Dashy
-  description: Welcome to your new dashboard!
+  title: alksv1 Dashboard
+  description: Welcome to your personal dashboard
   navLinks:
-  - title: GitHub
-    path: https://github.com/Lissy93/dashy
-  - title: Documentation
-    path: https://dashy.to/docs
+    - title: Blog
+      path: https://blog.alksv2.icu
+    - title: GitHub
+      path: https://github.com/alksv1
+    - title: Email
+      path: mailto:alksv2@proton.me
+  footer: '<span>Maintained by <a href="https://github.com/alksv1">alksv1</a> &bull; <a href="mailto:alksv2@proton.me">alksv2@proton.me</a> &bull; <a href="https://blog.alksv2.icu">blog.alksv2.icu</a></span>'
 
-# Optional app settings and configuration
 appConfig:
   theme: colorful
+  webSearch:
+    searchEngine: google
+    openingMethod: newtab
+    openUrlsDirectly: true
 
-# Main content - An array of sections, each containing an array of items
 sections:
-  - name: Getting Started
-    icon: fas fa-rocket
-    items:
-      - title: GitHub
-        description: Source Code, Issues and Pull Requests
-        url: https://github.com/lissy93/dashy
-        icon: si-github
-      - title: Docs
-        description: Configuring & Usage Documentation
-        provider: Dashy.to
-        icon: far fa-book
-        url: https://dashy.to/docs
-
-  - name: Support Dashy
-    icon: fas fa-heart
+  - name: Overview
+    icon: fas fa-tachometer-alt
     displayData:
-      itemSize: large
+      cols: 2
     widgets:
-      - type: image
-        label: Dashy is made possible thanks to our awesome sponsors
+      - type: clock
         options:
-          imagePath: https://readme-contribs.as93.net/sponsors/lissy93?perRow=5&shape=squircle
-    items:
-      - title: Sponsor
-        url: https://github.com/sponsors/lissy93
-        description: Sponsor @Lissy93 on GitHub to support with ongoing development of Dashy
-        icon: 🩷
-        color: '#ff78d1'
-        backgroundColor: '#c30c844a'
+          timeZone: Asia/Shanghai
+          format: zh-CN
+          customCityName: Beijing
+          hideDate: false
+          hideSeconds: false
+      - type: custom-search
+        options:
+          placeholder: Search with Google...
+          openingMethod: newtab
+          engines:
+            - title: Google
+              url: https://www.google.com/search?q=
 
-  - name: Latest Updates
-    icon: fas fa-code-branch
+  - name: Profile & About
+    icon: fas fa-user
+    items:
+      - title: Email
+        description: alksv2@proton.me
+        url: mailto:alksv2@proton.me
+        icon: si-protonmail
+      - title: GitHub
+        description: github.com/alksv1
+        url: https://github.com/alksv1
+        icon: si-github
+      - title: Blog
+        description: blog.alksv2.icu
+        url: https://blog.alksv2.icu
+        icon: fas fa-blog
+
+  - name: Cloud & Infrastructure
+    icon: fas fa-cloud
+    items:
+      - title: Cloudflare
+        description: Cloudflare Dashboard
+        url: https://dash.cloudflare.com
+        icon: si-cloudflare
+      - title: Vercel
+        description: Develop. Preview. Ship.
+        url: https://vercel.com
+        icon: si-vercel
+      - title: Azure
+        description: Microsoft Azure Portal
+        url: https://portal.azure.com
+        icon: mdi-microsoft-azure
+      - title: 阿里云
+        description: 阿里云管理控制台
+        url: https://homenew.console.aliyun.com
+        icon: si-alibabacloud
+      - title: 腾讯云中国版
+        description: 腾讯云控制台
+        url: https://console.cloud.tencent.com
+        icon: si-tencentqq
+      - title: 雨云
+        description: 雨云服务控制台
+        url: https://www.rainyun.com
+        icon: fas fa-cloud-rain
+
+  - name: AI Tools
+    icon: fas fa-robot
+    items:
+      - title: ChatGPT
+        description: OpenAI ChatGPT
+        url: https://chatgpt.com
+        icon: si-openai
+      - title: Gemini
+        description: Google Gemini
+        url: https://gemini.google.com
+        icon: si-googlegemini
+      - title: Muse.ai
+        description: Next-gen video search & platform
+        url: https://muse.ai
+        icon: fas fa-play-circle
+
+  - name: Services & Monitoring
+    icon: fas fa-server
+    items:
+      - title: Uptime Kuma
+        description: kuma.alksv2.icu
+        url: https://kuma.alksv2.icu
+        icon: si-uptimekuma
+      - title: GitHub
+        description: Code, pull requests, issues
+        url: https://github.com
+        icon: si-github
+
+  - name: Community & News
+    icon: fas fa-newspaper
     displayData:
       cols: 1
-      rows: 3
-      cutToHeight: true
     widgets:
-      - type: rss-feed
+      - type: hackernews-trending
         options:
-          rssUrl: https://github.com/lissy93/dashy/releases.atom
-          limit: 5
+          limit: 8
+    items:
+      - title: Hacker News
+        description: News and discussions for hackers
+        url: https://news.ycombinator.com
+        icon: si-ycombinator
