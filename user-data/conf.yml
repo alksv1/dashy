@@ -34,7 +34,7 @@ sections:
           hideSeconds: false
       - type: custom-search
         options:
-          placeholder: Search with Google...
+          placeholder: Search Google or enter URL (e.g. bilibili.com)...
           openingMethod: newtab
           engines:
             - title: Google
