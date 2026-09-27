@@ -130,6 +130,7 @@ const COMPAT = {
   'public-holidays': 'PublicHolidays',
   'public-ip': 'PublicIp',
   'rescue-time': 'RescueTime',
+  'podcast-player': 'PodcastPlayer',
   'rss-feed': 'RssFeed',
   sabnzbd: 'Sabnzbd',
   'sports-scores': 'SportsScores',
