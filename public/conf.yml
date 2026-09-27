@@ -10,7 +10,7 @@ pageInfo:
       path: https://github.com/alksv1
     - title: Email
       path: mailto:alksv2@proton.me
-  footer: '<span>Maintained by <a href="https://github.com/alksv1">alksv1</a> &bull; <a href="mailto:alksv2@proton.me">alksv2@proton.me</a> &bull; <a href="https://blog.alksv2.icu">blog.alksv2.icu</a></span>'
+  footer: '<span>Maintained by <a href="https://github.com/alksv1">alksv1</a> &bull; alksv2@proton.me &bull; <a href="https://blog.alksv2.icu">blog.alksv2.icu</a></span>'
 
 appConfig:
   theme: colorful
@@ -42,18 +42,23 @@ sections:
 
   - name: Profile & About
     icon: fas fa-user
+    displayData:
+      itemSize: medium
     items:
-      - title: Email
-        description: alksv2@proton.me
-        url: mailto:alksv2@proton.me
+      - title: alksv2@proton.me
+        description: Click to copy email
+        url: alksv2@proton.me
+        target: clipboard
         icon: si-protonmail
       - title: GitHub
         description: github.com/alksv1
         url: https://github.com/alksv1
+        target: newtab
         icon: si-github
       - title: Blog
         description: blog.alksv2.icu
         url: https://blog.alksv2.icu
+        target: newtab
         icon: fas fa-blog
 
   - name: Cloud & Infrastructure
