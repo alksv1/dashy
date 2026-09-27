@@ -11,7 +11,7 @@
       />
       <div class="podcast-meta">
         <h4 class="podcast-title">{{ feedInfo.title || '科技周报' }}</h4>
-        <p class="podcast-desc" v-if="feedInfo.description">{{ cleanText(feedInfo.description) }}</p>
+        <p class="podcast-desc" v-if="cleanDescription">{{ cleanDescription }}</p>
       </div>
     </div>
 
@@ -74,8 +74,7 @@
 
 <script>
 import WidgetMixin from '@/mixins/WidgetMixin';
-import request from '@/utils/request';
-import { widgetApiEndpoints } from '@/utils/config/defaults';
+import ErrorHandler from '@/utils/logging/ErrorHandler';
 
 export default {
   name: 'PodcastPlayer',
@@ -88,6 +87,7 @@ export default {
       isPlaying: false,
       loading: true,
       errorMsg: null,
+      currentJsonpScript: null,
     };
   },
   computed: {
@@ -97,8 +97,14 @@ export default {
         'https://muse.ai/podcasts/feed/1293396087193331/a5831f17-c3a9-4655-b854-ea0921c80e32'
       );
     },
-    limit() {
-      return this.options.limit || 15;
+    cleanDescription() {
+      if (!this.feedInfo?.description) return '';
+      // 过滤掉原 RSS 中折行的 "AI Generated" 等噪音尾缀，保留纯净简介
+      const clean = this.feedInfo.description
+        .replace(/AI Generated/gi, '')
+        .replace(/<[^>]*>?/gm, '')
+        .trim();
+      return clean;
     },
   },
   mounted() {
@@ -107,13 +113,21 @@ export default {
       this.attachAudioListeners();
     });
   },
+  beforeUnmount() {
+    if (this.currentJsonpScript && document.body.contains(this.currentJsonpScript)) {
+      document.body.removeChild(this.currentJsonpScript);
+    }
+  },
   methods: {
     update() {
       this.fetchPodcastData();
     },
     cleanText(str) {
       if (!str) return '';
-      return str.replace(/<[^>]*>?/gm, '').trim();
+      return str
+        .replace(/AI Generated/gi, '')
+        .replace(/<[^>]*>?/gm, '')
+        .trim();
     },
     attachAudioListeners() {
       const audio = this.$refs.audioElement;
@@ -128,17 +142,26 @@ export default {
         this.isPlaying = false;
       };
     },
-    async fetchPodcastData() {
+    fetchPodcastData() {
       this.loading = true;
       this.errorMsg = null;
-      try {
-        const apiUrl = `${widgetApiEndpoints.rssToJson}?rss_url=${encodeURIComponent(
-          this.feedUrl
-        )}&count=${this.limit}`;
-        const res = await request.get(apiUrl);
-        if (res.data && res.data.status === 'ok') {
-          this.feedInfo = res.data.feed || {};
-          const rawItems = res.data.items || [];
+
+      if (this.currentJsonpScript && document.body.contains(this.currentJsonpScript)) {
+        document.body.removeChild(this.currentJsonpScript);
+      }
+
+      const cbName = `rss2json_cb_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const script = document.createElement('script');
+      this.currentJsonpScript = script;
+
+      window[cbName] = (data) => {
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+        this.loading = false;
+
+        if (data && data.status === 'ok') {
+          this.feedInfo = data.feed || {};
+          const rawItems = data.items || [];
           const parsed = rawItems.map((item) => {
             const enclosure = item.enclosure || {};
             return {
@@ -151,7 +174,7 @@ export default {
             };
           }).filter((ep) => ep.audioUrl);
 
-          // 核心：强制按发布时间从新到旧倒序排序（最新的在最上面）
+          // 核心：强制按发布时间倒序排序（最新的在最上面）
           parsed.sort((a, b) => b.timestamp - a.timestamp);
           this.episodes = parsed;
 
@@ -159,16 +182,22 @@ export default {
             this.currentTrack = this.episodes[0];
           }
         } else {
-          this.errorMsg = '获取播客订阅失败，请稍后刷新';
+          this.errorMsg = data?.message || '获取播客订阅失败，请稍后刷新';
         }
-      } catch (err) {
-        this.errorMsg = '网络连接异常，无法加载播客列表';
-      } finally {
+      };
+
+      script.onerror = () => {
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
         this.loading = false;
-        this.$nextTick(() => {
-          this.attachAudioListeners();
-        });
-      }
+        this.errorMsg = '网络连接异常，无法加载播客列表';
+      };
+
+      // 注意：rss2json 免费接口禁止传 count，否则返回 422；此处使用标准接口并通过 JSONP 消除任何跨域拦截
+      script.src = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(
+        this.feedUrl
+      )}&callback=${cbName}`;
+      document.body.appendChild(script);
     },
     playTrack(ep) {
       if (this.currentTrack && this.currentTrack.audioUrl === ep.audioUrl) {
@@ -179,7 +208,8 @@ export default {
             if (playPromise !== undefined) {
               playPromise.then(() => {
                 this.isPlaying = true;
-              }).catch(() => {
+              }).catch((e) => {
+                ErrorHandler('Audio playback prevented by browser', e);
                 this.isPlaying = false;
               });
             }
@@ -200,7 +230,8 @@ export default {
           if (playPromise !== undefined) {
             playPromise.then(() => {
               this.isPlaying = true;
-            }).catch(() => {
+            }).catch((e) => {
+              ErrorHandler('Audio playback prevented by browser', e);
               this.isPlaying = false;
             });
           }
@@ -264,11 +295,7 @@ export default {
         margin: 0.35rem 0 0 0;
         font-size: 0.82rem;
         line-height: 1.4;
-        opacity: 0.8;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        opacity: 0.85;
       }
     }
   }
@@ -321,7 +348,7 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: 300px;
+    max-height: 320px;
     overflow-y: auto;
     padding-right: 0.2rem;
 
