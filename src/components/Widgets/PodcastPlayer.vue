@@ -15,59 +15,113 @@
       </div>
     </div>
 
-    <!-- 当前播放器控制条 -->
-    <div class="current-player" v-if="currentTrack">
-      <div class="current-title-row">
-        <span class="playing-badge">Now Playing</span>
-        <span class="current-title" :title="currentTrack.title">{{ currentTrack.title }}</span>
+    <!-- 精致迷你播放卡片 -->
+    <div class="player-card" v-if="currentTrack">
+      <div class="track-info-row">
+        <div class="status-indicator">
+          <span class="live-dot" :class="{ playing: isPlaying }"></span>
+          <span class="badge-text">{{ isPlaying ? 'Playing' : 'Ready' }}</span>
+        </div>
+        <span class="track-title" :title="currentTrack.title">{{ currentTrack.title }}</span>
       </div>
 
-      <!-- 原生自适应音频播放器 -->
+      <div class="controls-main">
+        <!-- 核心大播放按钮 -->
+        <button
+          class="ctrl-btn play-toggle"
+          @click="togglePlayCurrent"
+          :title="isPlaying ? '暂停' : '播放'"
+        >
+          <svg v-if="!isPlaying" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+        </button>
+
+        <!-- 进度条轨道与时间 -->
+        <div class="timeline-container">
+          <div class="slider-wrapper">
+            <input
+              type="range"
+              min="0"
+              :max="duration || 100"
+              step="1"
+              :value="currentTime"
+              @input="seekAudio"
+              class="custom-range"
+              :style="progressStyle"
+            />
+          </div>
+          <div class="time-meta">
+            <span>{{ formatTime(currentTime) }}</span>
+            <span>{{ formatTime(duration) }}</span>
+          </div>
+        </div>
+
+        <!-- 音量/静音控制 -->
+        <div class="volume-container">
+          <button class="vol-btn" @click="toggleMute" :title="isMuted ? '取消静音' : '静音'">
+            <svg v-if="isMuted || volume === 0" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+            </svg>
+            <svg v-else-if="volume < 0.5" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 隐藏的原生 audio 标签，负责解码和底层流传输 -->
       <audio
         ref="audioElement"
         :src="getPlayableUrl(currentTrack.audioUrl)"
-        controls
         preload="metadata"
-        class="audio-bar"
         @play="isPlaying = true"
         @pause="isPlaying = false"
-        @ended="isPlaying = false"
+        @ended="onEnded"
+        @timeupdate="onTimeUpdate"
+        @loadedmetadata="onLoadedMetadata"
       ></audio>
     </div>
 
-    <!-- 剧集列表（按发布时间倒序排列，最新期在最上） -->
+    <!-- 剧集列表（倒序排列，最新在最上） -->
     <div class="episode-list" v-if="episodes && episodes.length > 0">
       <div
         v-for="(ep, idx) in episodes"
         :key="ep.guid || idx"
         :class="['episode-card', { active: currentTrack && currentTrack.audioUrl === ep.audioUrl }]"
+        @click="playTrack(ep)"
       >
-        <div class="episode-main">
+        <button
+          class="list-play-btn"
+          @click.stop="playTrack(ep)"
+          :title="currentTrack && currentTrack.audioUrl === ep.audioUrl && isPlaying ? '暂停' : '播放'"
+        >
+          <svg v-if="currentTrack && currentTrack.audioUrl === ep.audioUrl && isPlaying" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </button>
+
+        <div class="episode-content">
           <div class="episode-top-row">
             <span class="ep-title" :title="ep.title">{{ ep.title }}</span>
             <span class="ep-date">{{ formatDate(ep.pubDate) }}</span>
           </div>
           <p class="ep-desc" v-if="ep.description" :title="ep.description">{{ ep.description }}</p>
         </div>
-
-        <div class="episode-actions">
-          <button
-            class="play-btn"
-            @click="playTrack(ep)"
-            :title="currentTrack && currentTrack.audioUrl === ep.audioUrl && isPlaying ? '暂停' : '播放这期'"
-          >
-            <span class="btn-icon">
-              {{ currentTrack && currentTrack.audioUrl === ep.audioUrl && isPlaying ? '⏸' : '▶' }}
-            </span>
-            <span class="btn-text">
-              {{ currentTrack && currentTrack.audioUrl === ep.audioUrl && isPlaying ? '暂停' : '播放' }}
-            </span>
-          </button>
-        </div>
       </div>
     </div>
 
     <div v-if="loading" class="player-loading">
+      <div class="loading-spinner"></div>
       <span>正在加载播客节目...</span>
     </div>
 
@@ -90,6 +144,10 @@ export default {
       episodes: [],
       currentTrack: null,
       isPlaying: false,
+      isMuted: false,
+      volume: 1,
+      currentTime: 0,
+      duration: 0,
       loading: true,
       errorMsg: null,
       currentJsonpScript: null,
@@ -108,6 +166,16 @@ export default {
         .replace(/AI Generated/gi, '')
         .replace(/<[^>]*>?/gm, '')
         .trim();
+    },
+    progressPercent() {
+      if (!this.duration || this.duration === 0) return 0;
+      return Math.min(100, Math.max(0, (this.currentTime / this.duration) * 100));
+    },
+    progressStyle() {
+      const p = this.progressPercent;
+      return {
+        background: `linear-gradient(to right, #3b82f6 0%, #60a5fa ${p}%, rgba(255, 255, 255, 0.15) ${p}%, rgba(255, 255, 255, 0.15) 100%)`,
+      };
     },
   },
   mounted() {
@@ -131,8 +199,41 @@ export default {
     },
     getPlayableUrl(rawUrl) {
       if (!rawUrl) return '';
-      // 使用 Cloudflare Pages Functions 代理，流式同源传输，彻底清除浏览器的所有跨域和阻拦问题
       return `/api/podcast-audio?url=${encodeURIComponent(rawUrl)}`;
+    },
+    onTimeUpdate() {
+      const audio = this.$refs.audioElement;
+      if (audio) {
+        this.currentTime = Math.floor(audio.currentTime);
+      }
+    },
+    onLoadedMetadata() {
+      const audio = this.$refs.audioElement;
+      if (audio && audio.duration) {
+        this.duration = Math.floor(audio.duration);
+      }
+    },
+    onEnded() {
+      this.isPlaying = false;
+      this.currentTime = 0;
+    },
+    seekAudio(e) {
+      const targetTime = parseFloat(e.target.value);
+      this.currentTime = targetTime;
+      const audio = this.$refs.audioElement;
+      if (audio) {
+        audio.currentTime = targetTime;
+      }
+    },
+    togglePlayCurrent() {
+      if (!this.currentTrack) return;
+      this.playTrack(this.currentTrack);
+    },
+    toggleMute() {
+      const audio = this.$refs.audioElement;
+      if (!audio) return;
+      this.isMuted = !this.isMuted;
+      audio.muted = this.isMuted;
     },
     fetchPodcastData() {
       this.loading = true;
@@ -166,7 +267,6 @@ export default {
             };
           }).filter((ep) => ep.audioUrl);
 
-          // 按发布时间倒序排列（最新发布的在最上面）
           parsed.sort((a, b) => b.timestamp - a.timestamp);
           this.episodes = parsed;
 
@@ -195,19 +295,26 @@ export default {
         const audio = this.$refs.audioElement;
         if (audio) {
           if (audio.paused) {
-            audio.play().catch(() => {});
+            audio.play().then(() => {
+              this.isPlaying = true;
+            }).catch(() => {});
           } else {
             audio.pause();
+            this.isPlaying = false;
           }
         }
         return;
       }
       this.currentTrack = ep;
+      this.currentTime = 0;
+      this.duration = 0;
       this.$nextTick(() => {
         const audio = this.$refs.audioElement;
         if (audio) {
           audio.load();
-          audio.play().catch((e) => {
+          audio.play().then(() => {
+            this.isPlaying = true;
+          }).catch((e) => {
             ErrorHandler('Audio playback error', e);
           });
         }
@@ -227,6 +334,13 @@ export default {
         return dateStr;
       }
     },
+    formatTime(seconds) {
+      if (!seconds || Number.isNaN(seconds) || seconds < 0) return '00:00';
+      const sec = Math.floor(seconds);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    },
   },
 };
 </script>
@@ -235,24 +349,26 @@ export default {
 .podcast-player {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.85rem;
   padding: 0.2rem;
   color: var(--widget-text-color, var(--item-text-color, #fff));
 
   .podcast-header {
     display: flex;
-    align-items: flex-start;
-    gap: 0.8rem;
-    padding-bottom: 0.6rem;
-    border-bottom: 1px solid var(--outline-color, rgba(255, 255, 255, 0.12));
+    align-items: center;
+    gap: 0.85rem;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px solid var(--outline-color, rgba(255, 255, 255, 0.08));
 
     .podcast-cover {
-      width: 58px;
-      height: 58px;
-      border-radius: 10px;
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
       object-fit: cover;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
       flex-shrink: 0;
+      transition: transform 0.2s ease;
+      &:hover { transform: scale(1.05); }
     }
 
     .podcast-meta {
@@ -261,48 +377,74 @@ export default {
 
       .podcast-title {
         margin: 0;
-        font-size: 1.15rem;
-        font-weight: 600;
+        font-size: 1.1rem;
+        font-weight: 700;
         color: var(--item-text-color, #fff);
+        letter-spacing: 0.2px;
       }
 
       .podcast-desc {
-        margin: 0.35rem 0 0 0;
-        font-size: 0.82rem;
+        margin: 0.3rem 0 0 0;
+        font-size: 0.8rem;
         line-height: 1.4;
-        opacity: 0.85;
+        opacity: 0.75;
       }
     }
   }
 
-  .current-player {
-    background: var(--item-background, rgba(255, 255, 255, 0.05));
-    border: 1px solid var(--outline-color, rgba(255, 255, 255, 0.15));
-    border-radius: 10px;
-    padding: 0.7rem 0.85rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  /* 精致流线型播放卡片 */
+  .player-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 0.75rem 0.95rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
 
-    .current-title-row {
+    .track-info-row {
       display: flex;
       align-items: center;
       gap: 0.6rem;
-      margin-bottom: 0.6rem;
 
-      .playing-badge {
-        font-size: 0.68rem;
-        font-weight: bold;
-        text-transform: uppercase;
-        background: #2563eb;
-        color: #ffffff !important;
-        padding: 0.2rem 0.45rem;
-        border-radius: 4px;
-        letter-spacing: 0.5px;
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0.2rem 0.5rem;
+        border-radius: 12px;
         flex-shrink: 0;
+
+        .live-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #94a3b8;
+          transition: all 0.2s ease;
+
+          &.playing {
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+            animation: pulse 1.5s infinite;
+          }
+        }
+
+        .badge-text {
+          font-size: 0.68rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          opacity: 0.9;
+        }
       }
 
-      .current-title {
+      .track-title {
         font-size: 0.88rem;
-        font-weight: 500;
+        font-weight: 600;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -311,44 +453,181 @@ export default {
       }
     }
 
-    .audio-bar {
-      width: 100%;
-      height: 38px;
-      border-radius: 6px;
-      outline: none;
+    .controls-main {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+
+      .play-toggle {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        outline: none;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+        &:hover {
+          transform: scale(1.08);
+          box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+        }
+
+        svg {
+          fill: currentColor;
+          line-height: 1;
+        }
+      }
+
+      .timeline-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+
+        .slider-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+
+          .custom-range {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 5px;
+            border-radius: 4px;
+            outline: none;
+            cursor: pointer;
+            transition: height 0.1s ease;
+
+            &::-webkit-slider-thumb {
+              -webkit-appearance: none;
+              width: 13px;
+              height: 13px;
+              border-radius: 50%;
+              background: #ffffff;
+              box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+              cursor: pointer;
+              transition: transform 0.1s ease;
+            }
+
+            &:hover::-webkit-slider-thumb {
+              transform: scale(1.25);
+            }
+          }
+        }
+
+        .time-meta {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.7rem;
+          opacity: 0.7;
+          font-family: var(--font-monospace, monospace);
+        }
+      }
+
+      .volume-container {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+
+        .vol-btn {
+          background: rgba(255, 255, 255, 0.08);
+          border: none;
+          color: var(--item-text-color, #fff);
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background 0.15s ease, transform 0.1s ease;
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+          }
+        }
+      }
     }
   }
 
+  /* 剧集列表卡片 */
   .episode-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    max-height: 320px;
+    gap: 0.45rem;
+    max-height: 290px;
     overflow-y: auto;
-    padding-right: 0.2rem;
+    padding-right: 0.25rem;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
 
     .episode-card {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 0.6rem;
-      background: var(--item-background, rgba(255, 255, 255, 0.05));
-      border: 1px solid var(--outline-color, rgba(255, 255, 255, 0.1));
-      border-radius: 8px;
-      padding: 0.55rem 0.75rem;
-      transition: all 0.15s ease-in-out;
+      gap: 0.75rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 0.55rem 0.8rem;
+      cursor: pointer;
+      transition: all 0.18s ease;
 
       &:hover {
-        background: var(--item-background-hover, rgba(255, 255, 255, 0.12));
-        border-color: var(--primary, #3b82f6);
+        background: rgba(255, 255, 255, 0.09);
+        border-color: rgba(59, 130, 246, 0.4);
+        transform: translateX(2px);
       }
 
       &.active {
         border-color: #3b82f6;
-        background: rgba(59, 130, 246, 0.15);
+        background: rgba(59, 130, 246, 0.12);
+        box-shadow: 0 2px 10px rgba(59, 130, 246, 0.15);
       }
 
-      .episode-main {
+      .list-play-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        color: #ffffff;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+
+        svg {
+          fill: currentColor;
+        }
+
+        &:hover {
+          background: #2563eb;
+          transform: scale(1.1);
+        }
+      }
+
+      &.active .list-play-btn {
+        background: #2563eb;
+      }
+
+      .episode-content {
         flex: 1;
         min-width: 0;
 
@@ -359,7 +638,7 @@ export default {
           gap: 0.5rem;
 
           .ep-title {
-            font-size: 0.88rem;
+            font-size: 0.86rem;
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
@@ -368,69 +647,58 @@ export default {
           }
 
           .ep-date {
-            font-size: 0.74rem;
-            opacity: 0.6;
+            font-size: 0.72rem;
+            opacity: 0.55;
             flex-shrink: 0;
           }
         }
 
         .ep-desc {
-          margin: 0.25rem 0 0 0;
-          font-size: 0.75rem;
+          margin: 0.2rem 0 0 0;
+          font-size: 0.74rem;
           line-height: 1.35;
-          opacity: 0.7;
+          opacity: 0.65;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
       }
-
-      .episode-actions {
-        flex-shrink: 0;
-
-        .play-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.3rem;
-          background: #2563eb !important;
-          color: #ffffff !important;
-          border: none !important;
-          border-radius: 20px;
-          padding: 0.35rem 0.75rem;
-          font-size: 0.78rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 0.1s ease, background 0.15s ease;
-          outline: none;
-
-          &:hover {
-            background: #1d4ed8 !important;
-            transform: scale(1.05);
-          }
-
-          .btn-icon {
-            font-size: 0.75rem;
-            color: #ffffff !important;
-          }
-
-          .btn-text {
-            color: #ffffff !important;
-          }
-        }
-      }
     }
   }
 
-  .player-loading,
-  .player-error {
-    text-align: center;
-    font-size: 0.85rem;
-    padding: 0.8rem 0;
+  .player-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    padding: 1.5rem 0;
     opacity: 0.75;
+
+    .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
   }
 
   .player-error {
+    text-align: center;
+    font-size: 0.82rem;
+    padding: 1rem 0;
     color: var(--warning, #ff5c5c);
   }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.15); }
 }
 </style>
